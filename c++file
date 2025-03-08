@@ -1,0 +1,46 @@
+/* ESP32 WebSocket Server Code */
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <WebSocketsServer.h>
+
+// WiFi credentials
+const char* ssid = "Your_WiFi_SSID";
+const char* password = "Your_WiFi_Password";
+
+// Initialize WebSocket Server
+AsyncWebServer server(80);
+WebSocketsServer webSocket(81); // WebSocket runs on port 81
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Connect to WiFi
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.println("Connecting to WiFi...");
+    }
+    Serial.println("Connected! IP address: " + WiFi.localIP().toString());
+
+    // Start WebSocket server
+    webSocket.begin();
+    webSocket.onEvent(webSocketEvent);
+
+    // Start HTTP server
+    server.begin();
+}
+
+// WebSocket event handler
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+    if (type == WStype_CONNECTED) {
+        Serial.println("Client connected!");
+    } 
+    else if (type == WStype_TEXT) {
+        Serial.printf("Received: %s\n", payload);
+        webSocket.sendTXT(num, "Message received!");
+    }
+}
+
+void loop() {
+    webSocket.loop();
+}
