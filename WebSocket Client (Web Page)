@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 WebSocket Test</title>
+</head>
+<body>
+    <h2>ESP32 WebSocket Test</h2>
+    <button onclick="sendMessage()">Send Message</button>
+    <p id="response"></p>
+
+    <script>
+        let ws = new WebSocket("ws://YOUR_ESP32_IP:81/");
+
+        ws.onopen = function() {
+            console.log("Connected to ESP32 WebSocket!");
+        };
+
+        ws.onmessage = function(event) {
+            document.getElementById("response").innerText = "Received: " + event.data;
+        };
+
+        function sendMessage() {
+            ws.send("Hello from browser!");
+        }
+    </script>
+</body>
+</html>
