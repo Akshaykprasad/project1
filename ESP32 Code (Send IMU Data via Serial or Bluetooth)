@@ -1,0 +1,41 @@
+#include <Wire.h>
+#include "MPU9250.h"
+#include "BluetoothSerial.h"
+
+MPU9250 imu(Wire, 0x68);  // IMU 9250 I2C address
+BluetoothSerial SerialBT;  // Bluetooth Serial object
+
+// Kalman filter variables
+float prev_x = 0, prev_y = 0, filtered_x = 0, filtered_y = 0;
+float kalman_gain = 0.5;  // Adjust for smoothing
+
+void setup() {
+    Serial.begin(115200);      // Serial for debugging
+    SerialBT.begin("ESP32_SmartPen");  // Bluetooth name
+
+    Wire.begin();
+    if (imu.begin() != 0) {
+        Serial.println("IMU not detected!");
+        while (1);
+    }
+    Serial.println("IMU 9250 Ready");
+}
+
+void loop() {
+    imu.readSensor();
+    float ax = imu.getAccelX() * 100;  // Convert to screen scale
+    float ay = imu.getAccelY() * 100;
+
+    // Apply Kalman filter
+    filtered_x = kalman_gain * ax + (1 - kalman_gain) * prev_x;
+    filtered_y = kalman_gain * ay + (1 - kalman_gain) * prev_y;
+    prev_x = filtered_x;
+    prev_y = filtered_y;
+
+    // Send X, Y motion data via Bluetooth & Serial
+    String data = String(filtered_x) + "," + String(filtered_y);
+    Serial.println(data);   // Send via Serial
+    SerialBT.println(data); // Send via Bluetooth
+
+    delay(50);  // Adjust for smoother tracking
+}
