@@ -1,0 +1,28 @@
+#include <Wire.h>
+#include "MPU9250.h"
+
+MPU9250 imu(Wire, 0x68);  // IMU 9250 I2C address
+float ax, ay;  // Acceleration X, Y for movement
+
+void setup() {
+    Serial.begin(115200);
+    Wire.begin();
+    if (imu.begin() != 0) {
+        Serial.println("IMU not detected!");
+        while (1);
+    }
+    Serial.println("IMU 9250 Ready");
+}
+
+void loop() {
+    imu.readSensor();
+    ax = imu.getAccelX() * 100;  // Scale to screen coordinates
+    ay = imu.getAccelY() * 100;
+
+    // Send X, Y motion data via Serial
+    Serial.print(ax);
+    Serial.print(",");
+    Serial.println(ay);
+
+    delay(50);  // Adjust for smoother tracking
+}
