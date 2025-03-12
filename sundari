@@ -1,0 +1,152 @@
+import cv2
+import numpy as np
+import easyocr
+import serial
+import re
+import pyttsx3
+from collections import Counter
+from scipy.signal import savgol_filter
+from tensorflow.keras.models import load_model
+
+# Initialize Serial Communication with ESP32 (Change 'COMX' to correct port)
+ser = serial.Serial('COMX', 115200, timeout=1)
+
+# Initialize EasyOCR reader
+reader = easyocr.Reader(['en'])
+
+# Load AI Model for Word Prediction (Fine-tuned GPT-2)
+word_model = load_model("word_prediction_model.h5")
+
+# Load CNN model for distinguishing ‘O’ vs ‘0’
+char_classifier = load_model("character_classifier.h5")
+
+# Initialize Speech Engine
+tts = pyttsx3.init()
+
+# Initialize drawing canvas
+canvas_width, canvas_height = 800, 400
+canvas = np.ones((canvas_height, canvas_width), dtype=np.uint8) * 255
+recognized_texts = []  # Store recognized words/numbers
+
+# File to save recognized text
+output_file = "recognized_text.txt"
+
+# Preloaded word-frequency dictionary (for next-word prediction)
+word_freq = Counter({"hello": 50, "world": 30, "python": 25, "handwriting": 15, 
+                     "recognition": 10, "test": 40, "predict": 20, "number": 35})
+
+# Variables for Kalman Filter (Noise reduction)
+prev_x, prev_y = canvas_width // 2, canvas_height // 2
+kalman_x, kalman_y = prev_x, prev_y
+q = 0.05  # Process noise
+r = 0.1  # Measurement noise
+
+def kalman_filter(measured, estimated, prev_estimated):
+    """ Apply Kalman filter for smoother handwriting """
+    predicted = prev_estimated
+    kalman_gain = q / (q + r)
+    estimated = predicted + kalman_gain * (measured - predicted)
+    return estimated
+
+def draw_with_imu(x, y):
+    """ Convert IMU acceleration values into screen coordinates """
+    global prev_x, prev_y, canvas, kalman_x, kalman_y
+
+    # Apply Kalman filtering to reduce jitter
+    kalman_x = kalman_filter(prev_x + x, kalman_x, prev_x)
+    kalman_y = kalman_filter(prev_y - y, kalman_y, prev_y)
+
+    new_x = int(max(0, min(kalman_x, canvas_width - 1)))
+    new_y = int(max(0, min(kalman_y, canvas_height - 1)))
+
+    # Draw on the canvas
+    cv2.line(canvas, (prev_x, prev_y), (new_x, new_y), (0, 0, 0), thickness=5)
+
+    prev_x, prev_y = new_x, new_y
+
+def preprocess_image(image):
+    """ Improve OCR accuracy using OpenCV """
+    gray = cv2.bitwise_not(image)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, thresholded = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return thresholded
+
+def recognize_handwriting():
+    """ Recognize handwriting, differentiate words & numbers, predict next word """
+    global recognized_texts
+
+    processed = preprocess_image(canvas)
+    cv2.imwrite("temp_processed.png", processed)
+
+    result = reader.readtext("temp_processed.png")
+
+    if result:
+        words = [res[1] for res in result]
+
+        # Clean detected text (distinguish between 'O' and '0')
+        cleaned_words = []
+        for word in words:
+            cleaned_word = re.sub(r'[^A-Za-z0-9]', '', word)
+            
+            # If single character, classify whether it's 'O' or '0'
+            if len(cleaned_word) == 1:
+                prediction = char_classifier.predict(np.array([[ord(cleaned_word)]]))
+                cleaned_word = "0" if prediction > 0.5 else "O"
+            
+            cleaned_words.append(cleaned_word)
+
+        # Predict the next word using AI
+        predicted_word = predict_next_word(cleaned_words[-1]) if cleaned_words else ""
+
+        recognized_texts.extend(cleaned_words)
+        if predicted_word:
+            recognized_texts.append(f"(Predicted: {predicted_word})")
+
+        # Convert recognized text to speech
+        speak_text(" ".join(cleaned_words))
+
+def predict_next_word(current_word):
+    """ Predicts the next word based on AI model """
+    predicted_word = word_model.predict(np.array([current_word]))[0]
+    return predicted_word if predicted_word in word_freq else ""
+
+def speak_text(text):
+    """ Convert recognized handwriting to speech """
+    tts.say(text)
+    tts.runAndWait()
+
+# Create window
+cv2.namedWindow("Handwriting Pad")
+
+while True:
+    # Read IMU data from ESP32
+    try:
+        imu_data = ser.readline().decode().strip()
+        x, y = map(float, imu_data.split(","))
+        draw_with_imu(x, y)
+    except:
+        pass
+
+    cv2.imshow("Handwriting Pad", canvas)
+
+    # Display recognized text dynamically
+    text_display = np.ones((100, canvas_width), dtype=np.uint8) * 255
+    cv2.putText(text_display, f"Recognized: {' '.join(recognized_texts)}", (50, 50),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
+    cv2.imshow("Recognized Text", text_display)
+
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == ord('s'):  # Recognize handwriting
+        recognize_handwriting()
+
+    elif key == ord('c'):  # Clear canvas
+        canvas[:] = 255
+        recognized_texts = []
+
+    elif key == ord('q'):  # Quit & save file
+        with open(output_file, "w", encoding="utf-8") as file:
+            file.write(" ".join(recognized_texts))
+        break
+
+cv2.destroyAllWindows()
