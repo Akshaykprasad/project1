@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Handwriting Recognition</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        #recognized-text {
+            font-size: 1.5rem;
+            color: #007bff;
+            font-weight: bold;
+            border: 2px solid #007bff;
+            padding: 10px;
+            margin-top: 20px;
+            display: inline-block;
+            background: #e9f5ff;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            margin-top: 20px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+    <script>
+        function updateText() {
+            fetch("/recognized_text")
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById("recognized-text").innerText = data.text;
+                });
+        }
+        setInterval(updateText, 2000); // Update every 2 seconds
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 Handwriting Recognition</h1>
+        <p>Recognized Text:</p>
+        <div id="recognized-text">Waiting for input...</div>
+        <button onclick="updateText()">Refresh Now</button>
+    </div>
+</body>
+</html>
