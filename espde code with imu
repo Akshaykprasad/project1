@@ -1,0 +1,59 @@
+#include <Wire.h>
+#include <MPU9250.h>
+#include <BluetoothSerial.h>
+#include <Kalman.h>
+
+MPU9250 imu(Wire, 0x68); // IMU connected via I2C
+BluetoothSerial SerialBT; // Bluetooth Serial
+Kalman kalmanX, kalmanY, kalmanZ;
+int status;
+
+void setup() {
+    Serial.begin(115200);
+    SerialBT.begin("SmartPen"); // Bluetooth device name
+    Wire.begin();
+    
+    status = imu.begin();
+    if (status < 0) {
+        Serial.println("IMU initialization failed!");
+        while (1);
+    }
+    Serial.println("IMU Initialized successfully!");
+}
+
+void loop() {
+    imu.readSensor();
+    
+    float ax = imu.getAccelX_mss();
+    float ay = imu.getAccelY_mss();
+    float az = imu.getAccelZ_mss();
+    
+    float gx = imu.getGyroX_rads();
+    float gy = imu.getGyroY_rads();
+    float gz = imu.getGyroZ_rads();
+    
+    float mx = imu.getMagX_uT();
+    float my = imu.getMagY_uT();
+    float mz = imu.getMagZ_uT();
+    
+    // Apply Kalman filter for smoother tracking
+    float filteredAx = kalmanX.getAngle(ax, gx, 0.01);
+    float filteredAy = kalmanY.getAngle(ay, gy, 0.01);
+    float filteredAz = kalmanZ.getAngle(az, gz, 0.01);
+    
+    // Send data over Bluetooth
+    String data = "Accel: " + String(filteredAx) + ", " + String(filteredAy) + ", " + String(filteredAz) + "; " +
+                  "Gyro: " + String(gx) + ", " + String(gy) + ", " + String(gz) + "; " +
+                  "Mag: " + String(mx) + ", " + String(my) + ", " + String(mz);
+    SerialBT.println(data);
+    
+    // Process handwriting into text (to be implemented in external software)
+    processHandwriting(filteredAx, filteredAy, filteredAz, gx, gy, gz);
+    
+    delay(50); // Smoother real-time tracking
+}
+
+void processHandwriting(float ax, float ay, float az, float gx, float gy, float gz) {
+    // Placeholder function for handwriting recognition
+    // This will process motion patterns and predict characters using ML
+}
