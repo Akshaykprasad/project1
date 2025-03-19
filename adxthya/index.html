@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>MPU9250 Visualization</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        overflow: hidden;
+        background-color: white;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      let prevX = canvas.width / 2;
+      let prevY = canvas.height / 2;
+
+      async function fetchSensorData() {
+        try {
+          const response = await fetch("http://10.42.0.43/sensor");
+          const data = await response.json();
+          drawLine(data.ax, data.ay);
+        } catch (error) {
+          console.error("Error fetching sensor data:", error);
+        }
+      }
+
+      function drawLine(ax, ay) {
+        let offsetX = ax * 10;
+        let offsetY = ay * 10;
+
+        let newX = prevX + offsetX;
+        let newY = prevY + offsetY;
+
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(prevX, prevY);
+        ctx.lineTo(newX, newY);
+        ctx.stroke();
+
+        prevX = newX;
+        prevY = newY;
+
+        // Keep points inside canvas
+        if (prevX < 0) prevX = 0;
+        if (prevX > canvas.width) prevX = canvas.width;
+        if (prevY < 0) prevY = 0;
+        if (prevY > canvas.height) prevY = canvas.height;
+      }
+
+      setInterval(fetchSensorData, 400);
+
+      window.addEventListener("resize", () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      });
+    </script>
+  </body>
+</html>
